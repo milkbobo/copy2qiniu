@@ -1,0 +1,9 @@
+{
+  "AccessKey":"qPioQd55AzEDOMqNYVccQAX8YqZTjlOamMNP7QOT",
+  "SecretKey":"jIZF04VCaSj-KKQSNHABqnXi0IcWWBNFKmNf_odw",
+  "Bucket":"hongbeibang-app",
+  "Website":"http://ochy6ops8.bkt.clouddn.com/",
+  "OriginDir":"./",
+  "TargetDir":"app/",
+  "IsRefreshFile":"true"
+}
