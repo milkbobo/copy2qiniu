@@ -1,6 +1,12 @@
 #Copy2qiniu
 可以一条命令语句，把所需要的文件自动复制到七牛储备上的工具
 
+#配置方法
+该程序必须安装golang语言，配置好后，在程序目录运行go install，就可以在需要上传的目录运行copy2qiniu命令使用了。
+
+#配置文件
+必须在需要运行改命令的目录下，建立copy2qiniu.config.json文件，例子如下：
+
 ```
 {
   "AccessKey":"qPioQd55AzEDOMqNYVccQAX8YqZTjlOamMNP7QOT",//七牛密匙

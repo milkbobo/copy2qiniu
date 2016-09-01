@@ -1,7 +1,6 @@
 package main
 
 import (
-	"./qetag"
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
@@ -36,8 +35,8 @@ type PutRet struct {
 
 func main() {
 
-	//获取配置文件
-	config, error := readFile("config.json")
+	//获取运行程序下的配置文件
+	config, error := readFile("copy2qiniu.config.json")
 	checkError(error)
 
 	//把json配置文件解析
@@ -60,14 +59,23 @@ func main() {
 	error = refreshFile(uploadHashFileData)
 	checkError(error)
 
+	fmt.Println("程序执行完毕，谢谢使用。")
+
 }
 
 func readFile(path string) (string, string) {
-	fi, err := os.Open(path)
+
+	runPath, err := filepath.Abs("./")
+	if err != nil {
+		return "", "filepath.Abs 出错内容:" + err.Error()
+	}
+
+	fi, err := os.Open(runPath + "/" + path)
 	if err != nil {
 		return "", "os.Open 出错内容:" + err.Error()
 	}
 	defer fi.Close()
+
 	fd, err := ioutil.ReadAll(fi)
 	if err != nil {
 		return "", "ioutil.ReadAll 出错内容:" + err.Error()
@@ -79,7 +87,7 @@ func getConfig(jsonData string) string {
 	configData := map[string]string{}
 	err := json.Unmarshal([]byte(jsonData), &configData)
 	if err != nil {
-		return "filepath.Abs 出错内容:" + err.Error()
+		return "json.Unmarshal 出错内容:" + err.Error()
 	}
 
 	var ok bool
@@ -172,7 +180,7 @@ func ReadDir(path string) ([]string, string) {
 
 }
 
-func getFileInfo(fileName []string) ([]string, []string, string) {
+func getFileInfo(Files []string) ([]string, []string, string) {
 
 	uploadFileData := []string{}
 	uploadHashFileData := []string{}
@@ -181,12 +189,12 @@ func getFileInfo(fileName []string) ([]string, []string, string) {
 	c := kodo.New(0, nil)
 	p := c.Bucket(Bucket)
 
-	for _, singleFile := range fileName {
+	for _, singleFile := range Files {
 
 		//调用Stat方法获取文件的信息
 		relativePathFileName := strings.Replace(singleFile, OriginAbsolutePath, "", -1)[1:]
-		fileName := TargetDir + relativePathFileName
-		entry, err := p.Stat(nil, fileName)
+		severFileName := TargetDir + relativePathFileName
+		entry, err := p.Stat(nil, severFileName)
 		// entry, err := p.Stat(nil, "yourdefinekey")
 
 		//打印出错时返回的信息
@@ -203,9 +211,9 @@ func getFileInfo(fileName []string) ([]string, []string, string) {
 		}
 
 		//获取本地文件的hash值
-		hashData, err := qetag.GetEtag(singleFile)
+		hashData, err := GetEtag(singleFile)
 		if err != nil {
-			return nil, nil, "qetag.GetEtag 出错内容:" + err.Error()
+			return nil, nil, "GetEtag 出错内容:" + err.Error()
 		}
 
 		//如果hash值不同，也添加到上传队列中
@@ -213,6 +221,8 @@ func getFileInfo(fileName []string) ([]string, []string, string) {
 			uploadHashFileData = append(uploadHashFileData, relativePathFileName)
 			uploadFileData = append(uploadFileData, singleFile)
 			continue
+		} else {
+			fmt.Println(`不上传该文件,"` + relativePathFileName + `"和服务器上的"` + severFileName + `"的hash值一样。`)
 		}
 
 		if err != nil {
@@ -252,6 +262,7 @@ func updataFile(updataFileData []string) string {
 		//调用PutFile方式上传，这里的key需要和上传指定的key一致
 
 		res := uploader.PutFile(nil, &ret, token, updataFileName, singleFile, nil)
+		fmt.Println(`成功上传文件"` + relativePathFileName + `"到"` + updataFileName + `"`)
 
 		//打印出错信息
 		if res != nil {
@@ -260,7 +271,7 @@ func updataFile(updataFileData []string) string {
 
 	}
 
-	fmt.Println("成功上传完文件到七牛")
+	fmt.Println("成功上传完文件到七牛存储服务器")
 
 	return ""
 
@@ -269,12 +280,12 @@ func updataFile(updataFileData []string) string {
 func refreshFile(uploadHashFileData []string) string {
 
 	if IsRefreshFile != "true" {
-		fmt.Println("没有开启刷新缓存,程序执行完毕")
+		fmt.Println("没有开启刷新缓存，不更新。")
 		return ""
 	}
 
 	if len(uploadHashFileData) == 0 {
-		fmt.Println("没有文件需要文件刷新缓存,程序执行完毕")
+		fmt.Println("没有文件需要刷新缓存,程序执行完毕")
 		return ""
 	}
 
@@ -300,7 +311,8 @@ func refreshFile(uploadHashFileData []string) string {
 	reqest, err :=
 		http.NewRequest(
 			"POST",
-			"http://fusion.qiniuapi.com/v2/tune/refresh", strings.NewReader(`{"urls":[`+urls+`]}`),
+			"http://fusion.qiniuapi.com/v2/tune/refresh",
+			strings.NewReader(`{"urls":[`+urls+`]}`),
 		)
 
 	if err != nil {
@@ -333,10 +345,10 @@ func refreshFile(uploadHashFileData []string) string {
 	}
 
 	if responseData["code"].(float64) == 200 {
-		fmt.Println("成功刷新七牛文件缓存,程序执行完毕")
+		fmt.Println("成功刷新七牛文件缓存:")
+		fmt.Println(urls)
 	} else {
-
-		return string(bodyByte)
+		return "刷新七牛文件缓存失败，错误内容:" + string(bodyByte)
 	}
 
 	return ""

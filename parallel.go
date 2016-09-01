@@ -1,14 +1,14 @@
-package qetag
+package main
 
 import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/base64"
-	"fmt"
+	// "fmt"
 	"io"
 	"os"
 	"runtime"
-	"time"
+	// "time"
 )
 
 const (
@@ -19,22 +19,22 @@ const (
   七牛的Etag算法
   github.com/qiniu/qetag
 */
-func main() {
-	ts := time.Now()
-	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, `Usage: qetag <filename>`)
-		return
-	}
-
-	etag, err := GetEtag(os.Args[1])
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-	fmt.Println(etag)
-	duration := time.Since(ts)
-	fmt.Println(duration.String())
-}
+// func main() {
+// 	ts := time.Now()
+// 	if len(os.Args) < 2 {
+// 		fmt.Fprintln(os.Stderr, `Usage: qetag <filename>`)
+// 		return
+// 	}
+//
+// 	etag, err := GetEtag(os.Args[1])
+// 	if err != nil {
+// 		fmt.Fprintln(os.Stderr, err)
+// 		return
+// 	}
+// 	fmt.Println(etag)
+// 	duration := time.Since(ts)
+// 	fmt.Println(duration.String())
+// }
 
 func GetEtag(filename string) (etag string, err error) {
 
