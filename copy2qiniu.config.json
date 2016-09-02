@@ -1,9 +1,9 @@
 {
-  "AccessKey":"qPioQd55AzEDOMqNYVccQAX8YqZTjlOamMNP7QOT",
-  "SecretKey":"jIZF04VCaSj-KKQSNHABqnXi0IcWWBNFKmNf_odw",
+  "AccessKey":"***",
+  "SecretKey":"***",
   "Bucket":"hongbeibang-app",
-  "Website":"http://ochy6ops8.bkt.clouddn.com/",
-  "OriginDir":"./",
-  "TargetDir":"app/",
+  "DomainName":"http://app.hongbeibang.com/",
+  "OriginPath":"./",
+  "TargetPath":"app/",
   "IsRefreshFile":"true"
 }

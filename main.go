@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -15,17 +16,21 @@ import (
 	"qiniupkg.com/api.v7/kodocli"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
-	AccessKey          string
-	SecretKey          string
-	Bucket             string
-	Website            string
-	OriginDir          string
-	OriginAbsolutePath string
-	TargetDir          string
-	IsRefreshFile      string
+	AccessKey             string
+	SecretKey             string
+	Bucket                string
+	DomainName            string
+	OriginPath            string
+	OriginAbsolutePath    string
+	TargetPath            string
+	RunPath               string
+	IsRefreshFile         string
+	RefreshFileRetryTimes = 1
+	FailRefreshPath       string
 )
 
 type PutRet struct {
@@ -33,18 +38,29 @@ type PutRet struct {
 	Key  string `json:"key"`
 }
 
+func init() {
+	//获取运行目录地址
+	var err error
+	RunPath, err = filepath.Abs("./")
+	if err != nil {
+		checkError("filepath.Abs 出错内容:" + err.Error())
+	}
+
+	FailRefreshPath = RunPath + "/failRefresh.config.temp"
+}
+
 func main() {
 
 	//获取运行程序下的配置文件
-	config, error := readFile("copy2qiniu.config.json")
+	config, error := readFile(RunPath + "/" + "copy2qiniu.config.json")
 	checkError(error)
 
 	//把json配置文件解析
 	error = getConfig(config)
 	checkError(error)
 
-	//或者文件夹下所有文件，除了隐藏文件意外
-	DirInfo, error := ReadDir(OriginAbsolutePath)
+	//读取文件夹下所有文件，除了隐藏文件意外
+	DirInfo, error := readDir(OriginAbsolutePath)
 	checkError(error)
 
 	//获得需要上传的文件
@@ -65,12 +81,7 @@ func main() {
 
 func readFile(path string) (string, string) {
 
-	runPath, err := filepath.Abs("./")
-	if err != nil {
-		return "", "filepath.Abs 出错内容:" + err.Error()
-	}
-
-	fi, err := os.Open(runPath + "/" + path)
+	fi, err := os.Open(path)
 	if err != nil {
 		return "", "os.Open 出错内容:" + err.Error()
 	}
@@ -107,14 +118,14 @@ func getConfig(jsonData string) string {
 		return "Bucket配置参数不存在或者不能为空"
 	}
 
-	OriginDir, ok = configData["OriginDir"]
-	if OriginDir == "" || ok == false {
-		return "OriginDir配置参数不存在或者不能为空"
+	OriginPath, ok = configData["OriginPath"]
+	if OriginPath == "" || ok == false {
+		return "OriginPath配置参数不存在或者不能为空"
 	}
 
-	TargetDir, ok = configData["TargetDir"]
-	if TargetDir == "" || ok == false {
-		return "TargetDir配置参数不存在或者不能为空"
+	TargetPath, ok = configData["TargetPath"]
+	if TargetPath == "" || ok == false {
+		return "TargetPath配置参数不存在或者不能为空"
 	}
 
 	IsRefreshFile, ok = configData["IsRefreshFile"]
@@ -122,16 +133,16 @@ func getConfig(jsonData string) string {
 		return "IsRefreshFile配置参数不存在或者不能为空"
 	}
 
-	Website, ok = configData["Website"]
-	if Website == "" || ok == false {
-		return "Website配置参数不存在或者不能为空"
+	DomainName, ok = configData["DomainName"]
+	if DomainName == "" || ok == false {
+		return "DomainName配置参数不存在或者不能为空"
 	}
 
 	conf.ACCESS_KEY = AccessKey
 	conf.SECRET_KEY = SecretKey
 
 	//获取绝对路径
-	OriginAbsolutePath, err = filepath.Abs(OriginDir)
+	OriginAbsolutePath, err = filepath.Abs(OriginPath)
 	if err != nil {
 		checkError("filepath.Abs 出错内容:" + err.Error())
 	}
@@ -149,7 +160,7 @@ func combineDirInfo(a1 []string, a2 []string) []string {
 	return a1
 }
 
-func ReadDir(path string) ([]string, string) {
+func readDir(path string) ([]string, string) {
 	result := []string{}
 	//获取文件夹所有的文件列表
 	tempResult, err := ioutil.ReadDir(path)
@@ -159,7 +170,7 @@ func ReadDir(path string) ([]string, string) {
 	for _, singleFileInfo := range tempResult {
 
 		//如果是隐藏文件，就忽略
-		if singleFileInfo.Name()[0:1] == "." {
+		if singleFileInfo.Name()[0:1] == "." || singleFileInfo.Name() == "copy2qiniu.config.json" {
 			continue
 		}
 
@@ -167,7 +178,7 @@ func ReadDir(path string) ([]string, string) {
 
 		if singleFileInfo.IsDir() {
 			//发现dir
-			result2, err := ReadDir(name)
+			result2, err := readDir(name)
 			if err != "" {
 				return nil, err
 			}
@@ -178,6 +189,19 @@ func ReadDir(path string) ([]string, string) {
 	}
 	return result, ""
 
+}
+
+func writeFile(filePath string, data string) {
+	openFile, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0666)
+	defer openFile.Close()
+	if err != nil {
+		checkError("os.OpenFile 出错内容:" + err.Error())
+	}
+
+	_, err = io.WriteString(openFile, data)
+	if err != nil {
+		checkError("io.WriteString 出错内容:" + err.Error())
+	}
 }
 
 func getFileInfo(Files []string) ([]string, []string, string) {
@@ -193,7 +217,7 @@ func getFileInfo(Files []string) ([]string, []string, string) {
 
 		//调用Stat方法获取文件的信息
 		relativePathFileName := strings.Replace(singleFile, OriginAbsolutePath, "", -1)[1:]
-		severFileName := TargetDir + relativePathFileName
+		severFileName := TargetPath + relativePathFileName
 		entry, err := p.Stat(nil, severFileName)
 		// entry, err := p.Stat(nil, "yourdefinekey")
 
@@ -243,7 +267,7 @@ func updataFile(updataFileData []string) string {
 		//创建一个Client
 		c := kodo.New(0, nil)
 
-		updataFileName := TargetDir + relativePathFileName
+		updataFileName := TargetPath + relativePathFileName
 
 		//设置上传的策略
 		policy := &kodo.PutPolicy{
@@ -284,30 +308,42 @@ func refreshFile(uploadHashFileData []string) string {
 		return ""
 	}
 
-	if len(uploadHashFileData) == 0 {
+	//检查上次运行刷新缓存有没有失败的文件
+	failRefreshFile := ""
+	if checkFileIsExist(FailRefreshPath) {
+		var error string
+		failRefreshFile, error = readFile(FailRefreshPath)
+		checkError(error)
+	}
+
+	//准备更新缓存
+
+	//读取上一次失败刷新缓存文件和传进来要刷新缓存的文件合并除重
+
+	failRefreshFileSlice := strings.Split(failRefreshFile, ",")
+	for singleKey, singleData := range failRefreshFileSlice {
+		singleData = strings.Trim(singleData, `"`)
+		failRefreshFileSlice[singleKey] = strings.Replace(singleData, DomainName+TargetPath, "", -1)
+	}
+
+	uniqData := uniq(failRefreshFileSlice, uploadHashFileData)
+
+	if len(uniqData) > 100 {
+		return "每天更新缓存文件数量不能超过100个"
+	}
+
+	urls := MergeUrls(uniqData)
+
+	if urls == "" {
 		fmt.Println("没有文件需要刷新缓存,程序执行完毕")
 		return ""
 	}
 
-	if len(uploadHashFileData) > 100 {
-		return "每天更新缓存文件数量不能超过100个"
-	}
-
-	//准备更新缓存的资料
-
 	token := getToken([]byte("/v2/tune/refresh\n"))
 
+ExecuteRefreshFile:
+
 	client := &http.Client{}
-
-	urls := ""
-
-	for _, singleUrl := range uploadHashFileData {
-		if urls != "" {
-			urls += ","
-		}
-		urls = urls + `"` + Website + singleUrl + `"`
-	}
-
 	reqest, err :=
 		http.NewRequest(
 			"POST",
@@ -337,7 +373,7 @@ func refreshFile(uploadHashFileData []string) string {
 	responseData := map[string]interface{}{}
 	err = json.Unmarshal([]byte(bodyByte), &responseData)
 	if err != nil {
-		return "filepath.Abs 出错内容:" + err.Error()
+		return "json.Unmarshal 出错内容:" + err.Error()
 	}
 
 	if response.StatusCode != 200 {
@@ -347,8 +383,28 @@ func refreshFile(uploadHashFileData []string) string {
 	if responseData["code"].(float64) == 200 {
 		fmt.Println("成功刷新七牛文件缓存:")
 		fmt.Println(urls)
+		fmt.Println("你今天还有" + strconv.FormatFloat(responseData["urlSurplusDay"].(float64), 'f', -1, 64) + "个文件可以刷新文件缓存")
+		if checkFileIsExist(FailRefreshPath) {
+			err = os.Remove(FailRefreshPath)
+			if err != nil {
+				return "os.Remove 出错内容:" + err.Error()
+			}
+		}
+
 	} else {
-		return "刷新七牛文件缓存失败，错误内容:" + string(bodyByte)
+		//如果刷新缓存不成功，写入文件提醒下次运行再刷新文件缓存
+		writeFile(FailRefreshPath, urls)
+		fmt.Println("错误内容:" + string(bodyByte))
+		if RefreshFileRetryTimes <= 10 {
+			fmt.Println("刷新七牛文件缓存失败,60秒后会自动再提交七牛刷新一下文件缓存，或者你重新执行copy2qiniu命令，将会重新刷新七牛文件缓存，请稍后...")
+		} else {
+			return "刷新缓存失败，已经执行缓存次数" + strconv.Itoa(RefreshFileRetryTimes) + "次，请联系七牛管理员查看原因。"
+		}
+
+		time.Sleep(60 * time.Second)
+		RefreshFileRetryTimes += 1
+		goto ExecuteRefreshFile
+		// return "错误内容:" + string(bodyByte)
 	}
 
 	return ""
@@ -365,9 +421,62 @@ func getToken(data []byte) string {
 	return token
 }
 
+func uniq(data1 []string, data2 []string) []string {
+	//合并去重相同数据
+	result := []string{}
+
+	mergeData := append(data1, data2...)
+
+	for _, i := range mergeData {
+
+		if len(result) == 0 {
+			if i != "" {
+				result = append(result, i)
+			}
+		} else {
+			for k, v := range result {
+				if i == v {
+					break
+				}
+				if k == len(result)-1 {
+					if i != "" {
+						result = append(result, i)
+					}
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+func MergeUrls(data []string) string {
+	urls := ""
+	for _, singleUrl := range data {
+		if urls != "" {
+			urls += ","
+		}
+		urls = urls + `"` + DomainName + TargetPath + singleUrl + `"`
+	}
+	return urls
+}
+
 func checkError(ErrorData string) {
 	if ErrorData != "" {
 		fmt.Println(ErrorData)
 		os.Exit(1)
 	}
+}
+
+// 判断文件是否存在  存在返回 true 不存在返回false
+func checkFileIsExist(filename string) bool {
+	var exist bool
+
+	_, err := os.Stat(filename)
+
+	if !os.IsNotExist(err) {
+		exist = true
+	}
+
+	return exist
 }
