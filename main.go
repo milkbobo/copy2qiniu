@@ -71,7 +71,7 @@ func main() {
 	error = updataFile(uploadFileData)
 	checkError(error)
 
-	//刷新七牛文件的缓存
+	//更新七牛文件的缓存
 	error = refreshFile(uploadHashFileData)
 	checkError(error)
 
@@ -304,11 +304,11 @@ func updataFile(updataFileData []string) string {
 func refreshFile(uploadHashFileData []string) string {
 
 	if IsRefreshFile != "true" {
-		fmt.Println("没有开启刷新缓存，不更新。")
+		fmt.Println("没有开启更新缓存，不更新。")
 		return ""
 	}
 
-	//检查上次运行刷新缓存有没有失败的文件
+	//检查上次运行更新缓存有没有失败的文件
 	failRefreshFile := ""
 	if checkFileIsExist(FailRefreshPath) {
 		var error string
@@ -318,7 +318,7 @@ func refreshFile(uploadHashFileData []string) string {
 
 	//准备更新缓存
 
-	//读取上一次失败刷新缓存文件和传进来要刷新缓存的文件合并除重
+	//读取上一次失败更新缓存文件和传进来要更新缓存的文件合并除重
 
 	failRefreshFileSlice := strings.Split(failRefreshFile, ",")
 	for singleKey, singleData := range failRefreshFileSlice {
@@ -335,7 +335,7 @@ func refreshFile(uploadHashFileData []string) string {
 	urls := MergeUrls(uniqData)
 
 	if urls == "" {
-		fmt.Println("没有文件需要刷新缓存,程序执行完毕")
+		fmt.Println("没有文件需要更新缓存,程序执行完毕")
 		return ""
 	}
 
@@ -381,9 +381,9 @@ ExecuteRefreshFile:
 	}
 
 	if responseData["code"].(float64) == 200 {
-		fmt.Println("成功刷新七牛文件缓存:")
+		fmt.Println("成功更新七牛文件缓存:")
 		fmt.Println(urls)
-		fmt.Println("你今天还有" + strconv.FormatFloat(responseData["urlSurplusDay"].(float64), 'f', -1, 64) + "个文件可以刷新文件缓存")
+		fmt.Println("你今天还有" + strconv.FormatFloat(responseData["urlSurplusDay"].(float64), 'f', -1, 64) + "个文件可以更新文件缓存")
 		if checkFileIsExist(FailRefreshPath) {
 			err = os.Remove(FailRefreshPath)
 			if err != nil {
@@ -392,19 +392,18 @@ ExecuteRefreshFile:
 		}
 
 	} else {
-		//如果刷新缓存不成功，写入文件提醒下次运行再刷新文件缓存
+		//如果更新缓存不成功，写入文件提醒下次运行再更新文件缓存
 		writeFile(FailRefreshPath, urls)
 		fmt.Println("错误内容:" + string(bodyByte))
 		if RefreshFileRetryTimes <= 10 {
-			fmt.Println("刷新七牛文件缓存失败,60秒后会自动再提交七牛刷新一下文件缓存，或者你重新执行copy2qiniu命令，将会重新刷新七牛文件缓存，请稍后...")
+			fmt.Println("更新七牛文件缓存失败,60秒后会自动再提交七牛更新一下文件缓存，或者你重新执行copy2qiniu命令，将会重新更新七牛文件缓存，请稍后...")
 		} else {
-			return "刷新缓存失败，已经执行缓存次数" + strconv.Itoa(RefreshFileRetryTimes) + "次，请联系七牛管理员查看原因。"
+			return "更新缓存失败，已经执行缓存次数" + strconv.Itoa(RefreshFileRetryTimes) + "次，请联系七牛管理员查看原因。"
 		}
 
 		time.Sleep(60 * time.Second)
 		RefreshFileRetryTimes += 1
 		goto ExecuteRefreshFile
-		// return "错误内容:" + string(bodyByte)
 	}
 
 	return ""
