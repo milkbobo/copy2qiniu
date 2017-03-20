@@ -14,6 +14,7 @@ import (
 	"qiniupkg.com/api.v7/conf"
 	"qiniupkg.com/api.v7/kodo"
 	"qiniupkg.com/api.v7/kodocli"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ var (
 	TargetPath            string
 	RunPath               string
 	IsRefreshFile         string
+	AllowUploadFiles      []string
 	RefreshFileRetryTimes = 1
 	FailRefreshPath       string
 )
@@ -138,6 +140,13 @@ func getConfig(jsonData string) string {
 		return "DomainName配置参数不存在或者不能为空"
 	}
 
+	AllowUploadFilesString, ok := configData["AllowUploadFiles"]
+	if AllowUploadFilesString == "" || ok == false {
+		return "DomainName配置参数不存在或者不能为空"
+	}
+
+	AllowUploadFiles = strings.Split(AllowUploadFilesString, ",")
+
 	conf.ACCESS_KEY = AccessKey
 	conf.SECRET_KEY = SecretKey
 
@@ -184,7 +193,13 @@ func readDir(path string) ([]string, string) {
 			}
 			result = combineDirInfo(result, result2)
 		} else {
-			result = append(result, name)
+			// 允许可以上传的文件
+			for _, value := range AllowUploadFiles {
+				matched, _ := regexp.MatchString(value, name[len(RunPath):])
+				if matched {
+					result = append(result, name)
+				}
+			}
 		}
 	}
 	return result, ""
@@ -219,7 +234,6 @@ func getFileInfo(Files []string) ([]string, []string, string) {
 		relativePathFileName := strings.Replace(singleFile, OriginAbsolutePath, "", -1)[1:]
 		severFileName := TargetPath + relativePathFileName
 		entry, err := p.Stat(nil, severFileName)
-		// entry, err := p.Stat(nil, "yourdefinekey")
 
 		//打印出错时返回的信息
 		if err != nil {

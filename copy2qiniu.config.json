@@ -2,8 +2,9 @@
   "AccessKey":"***",
   "SecretKey":"***",
   "Bucket":"hongbeibang-app",
-  "DomainName":"http://app.hongbeibang.com/",
+  "DomainName":"https://app.hongbeibang.com/",
   "OriginPath":"./",
   "TargetPath":"app/",
+  "AllowUploadFiles":"*",
   "IsRefreshFile":"true"
 }
