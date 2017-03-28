@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -30,14 +31,21 @@ var (
 	TargetPath            string
 	RunPath               string
 	IsRefreshFile         string
+	IsTestVisit           string
 	AllowUploadFiles      []string
 	RefreshFileRetryTimes = 1
 	FailRefreshPath       string
+	HTTPC                 *HTTPClient
 )
 
 type PutRet struct {
 	Hash string `json:"hash"`
 	Key  string `json:"key"`
+}
+
+// HTTPClient http客户端
+type HTTPClient struct {
+	http.Client
 }
 
 func init() {
@@ -49,6 +57,8 @@ func init() {
 	}
 
 	FailRefreshPath = RunPath + "/failRefresh.config.temp"
+
+	HTTPC = &HTTPClient{}
 }
 
 func main() {
@@ -75,6 +85,10 @@ func main() {
 
 	//更新七牛文件的缓存
 	error = refreshFile(uploadHashFileData)
+	checkError(error)
+
+	//访问文件
+	error = AccessNetworkFild(uploadFileData)
 	checkError(error)
 
 	fmt.Println("程序执行完毕，谢谢使用。")
@@ -133,6 +147,11 @@ func getConfig(jsonData string) string {
 	IsRefreshFile, ok = configData["IsRefreshFile"]
 	if IsRefreshFile == "" || ok == false {
 		return "IsRefreshFile配置参数不存在或者不能为空"
+	}
+
+	IsTestVisit, ok = configData["IsTestVisit"]
+	if IsRefreshFile == "" || ok == false {
+		return "IsTestVisit配置参数不存在或者不能为空"
 	}
 
 	DomainName, ok = configData["DomainName"]
@@ -424,6 +443,40 @@ ExecuteRefreshFile:
 
 }
 
+func AccessNetworkFild(uploaFile []string) string {
+	if IsTestVisit != "true" {
+		fmt.Println("没有开启IsTestVisit，不尝试访问文件。")
+		return ""
+	}
+
+	for _, fild := range uploaFile {
+
+		for {
+
+			networkFild := DomainName + TargetPath + fild[len(OriginAbsolutePath):]
+			fmt.Println(networkFild)
+			res, err := HTTPC.Get(networkFild)
+			if nil != err {
+				if strings.Index(err.Error(), "(Client.Timeout exceeded while awaiting headers)") != -1 {
+					// 超时，重新循环
+					continue
+				}
+				return "NewHTTPClient().Get() 出错内容:" + err.Error()
+			}
+
+			if res.StatusCode == 200 {
+				fmt.Println(networkFild + "文件成功访问")
+				break
+			}
+			fmt.Println(networkFild + "文件" + strconv.Itoa(res.StatusCode) + "，1秒钟后重新尝试访问")
+			time.Sleep(time.Second)
+		}
+
+	}
+
+	return ""
+}
+
 func getToken(data []byte) string {
 	h := hmac.New(sha1.New, []byte(SecretKey))
 	h.Write(data)
@@ -472,6 +525,16 @@ func MergeUrls(data []string) string {
 		urls = urls + `"` + DomainName + TargetPath + singleUrl + `"`
 	}
 	return urls
+}
+func NewHTTPClient() *http.Client {
+	config := &tls.Config{InsecureSkipVerify: true}
+	tr := &http.Transport{TLSClientConfig: config}
+	client := http.Client{
+		Transport: tr,
+		Timeout:   15 * time.Second,
+	}
+
+	return &client
 }
 
 func checkError(ErrorData string) {

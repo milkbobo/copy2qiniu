@@ -10,7 +10,7 @@
 # 配置文件
 必须在需要运行该命令的目录下，建立copy2qiniu.config.json文件，例子如下：
 
-```
+```json
 {
   "AccessKey":"***",//七牛密匙
   "SecretKey":"***",//七牛密匙
@@ -19,6 +19,7 @@
   "OriginPath":"./",//你需要上传文件的目录地址，必须斜号结尾
   "TargetPath":"app/",//你需要上传到七牛的那个文件夹，必须斜号结尾
   "AllowUploadFiles":"*", // 只上传的文件名，如果运行全部文件上传，填写 * , 可以填写文件名称。支持通配符方式填写，逗号(,)隔开。
-  "IsRefreshFile":"true"//是否开启刷新缓存
+  "IsRefreshFile":"true",//是否开启刷新缓存
+  "IsTestVisit":"true" // 是否测试访问，上传文件后，是否能测试能访问后才结束程序。
 }
 ```

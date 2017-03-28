@@ -6,5 +6,6 @@
   "OriginPath":"./",
   "TargetPath":"app/",
   "AllowUploadFiles":"*",
-  "IsRefreshFile":"true"
-}
+  "IsRefreshFile":"true",
+  "IsTestVisit":"true"
+}
